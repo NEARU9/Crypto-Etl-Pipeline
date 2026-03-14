@@ -202,8 +202,7 @@ Then open the local URL shown in the terminal to view the dashboard.
 
 **Rahmat Reza Kurniawan**
 
-Aspiring Data Engineer
-Python | SQL | Data Pipeline | Analytics
+Data Engineer
 
 ---
 
