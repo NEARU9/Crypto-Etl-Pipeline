@@ -1,0 +1,16 @@
+# Core dependencies
+pandas==2.0.3
+numpy==1.24.3
+requests==2.31.0
+
+# Database
+sqlalchemy==2.0.19
+psycopg2-binary==2.9.7
+
+# Dashboard
+streamlit==1.25.0
+plotly==5.15.0
+
+# Optional
+python-dotenv==1.0.0  
+jupyter==1.0.0       
