@@ -19,7 +19,7 @@ This project is designed to showcase **ETL pipeline development, data engineerin
 
 ## 📊 Dashboard Preview
 
-![Bitcoin Dashboard](images/dashboard.png)
+![Bitcoin Dashboard](Dashboard.png)
 
 ---
 
