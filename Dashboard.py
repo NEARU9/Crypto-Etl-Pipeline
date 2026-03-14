@@ -6,6 +6,7 @@ import plotly.express as px
 from plotly.subplots import make_subplots
 import numpy as np
 from datetime import datetime, timedelta
+import requests
 
 # Page configuration
 st.set_page_config(
@@ -82,17 +83,60 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Fungsi untuk koneksi database dengan caching
+# # Fungsi untuk koneksi database dengan caching
+# @st.cache_data(ttl=3600)  # Cache 1 jam
+# def load_data():
+#     """Load data dari PostgreSQL dengan caching"""
+#     try:
+#         engine = create_engine("postgresql://postgres:RezaReza@localhost:5432/crypto_pipeline")
+#         df = pd.read_sql("SELECT * FROM bitcoin_market ORDER BY date", engine)
+#         return df
+#     except Exception as e:
+#         st.error(f"Error connecting to database: {e}")
+#         return pd.DataFrame()
+
+def extract_bitcoin_data():
+    """Extract langsung dari API"""
+    url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart"
+    params = {
+        "vs_currency": "usd",
+        "days": "360"
+    }
+    response = requests.get(url, params=params)
+    return response.json()
+
+def transform_bitcoin_data(data):
+    """Transform data dari API"""
+    prices = data["prices"]
+    market_caps = data["market_caps"]
+    volumes = data["total_volumes"]
+    
+    df_prices = pd.DataFrame(prices, columns=["timestamp", "price"])
+    df_marketcap = pd.DataFrame(market_caps, columns=["timestamp", "market_cap"])
+    df_volume = pd.DataFrame(volumes, columns=["timestamp", "volume"])
+    
+    df = df_prices.merge(df_marketcap, on="timestamp")
+    df = df.merge(df_volume, on="timestamp")
+    df["date"] = pd.to_datetime(df["timestamp"], unit="ms")
+    df = df[["date", "price", "market_cap", "volume"]]
+    df = df.sort_values("date").reset_index(drop=True)
+    
+    return df
+
 @st.cache_data(ttl=3600)  # Cache 1 jam
-def load_data():
-    """Load data dari PostgreSQL dengan caching"""
+def load_data_from_api():
+    """Load data langsung dari API"""
     try:
-        engine = create_engine("postgresql://postgres:RezaReza@localhost:5432/crypto_pipeline")
-        df = pd.read_sql("SELECT * FROM bitcoin_market ORDER BY date", engine)
+        with st.spinner('Fetching data from CoinGecko...'):
+            raw_data = extract_bitcoin_data()
+            df = transform_bitcoin_data(raw_data)
         return df
     except Exception as e:
-        st.error(f"Error connecting to database: {e}")
+        st.error(f"Error fetching from API: {e}")
         return pd.DataFrame()
+
+# Panggil fungsi
+df = load_data_from_api()
 
 # Fungsi untuk menghitung moving average
 def calculate_moving_average(df, window):
