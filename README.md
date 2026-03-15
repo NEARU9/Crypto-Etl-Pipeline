@@ -4,6 +4,13 @@ End-to-end ETL pipeline that extracts cryptocurrency data from the CoinGecko API
 
 ---
 
+## 🌐 Live Dashboard
+
+You can view the live dashboard here:
+
+🔗 **[Crypto ETL Pipeline Dashboard](https://crypto-etl-pipeline-reza.streamlit.app/)**
+
+---
 ## 🚀 Project Overview
 
 This project demonstrates a **complete cryptocurrency data pipeline**:
