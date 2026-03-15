@@ -1,12 +1,12 @@
 import streamlit as st
 import pandas as pd
-from sqlalchemy import create_engine
 import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
 import numpy as np
 from datetime import datetime, timedelta
 import requests
+import os
 
 # Page configuration
 st.set_page_config(
@@ -19,12 +19,7 @@ st.set_page_config(
 # CSS
 st.markdown("""
     <style>
-    /* Main container styling */
-    .main {
-        padding: 0rem 1rem;
-    }
-    
-    /* Title styling */
+    .main { padding: 0rem 1rem; }
     .title {
         text-align: center;
         padding: 1rem;
@@ -33,8 +28,6 @@ st.markdown("""
         border-radius: 10px;
         margin-bottom: 2rem;
     }
-    
-    /* Metric card styling */
     .metric-card {
         background: white;
         padding: 1.5rem;
@@ -43,13 +36,10 @@ st.markdown("""
         text-align: center;
         transition: transform 0.3s;
     }
-    
     .metric-card:hover {
         transform: translateY(-5px);
         box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
     }
-    
-    /* Info box styling */
     .info-box {
         background: #f8f9fa;
         padding: 1rem;
@@ -57,33 +47,115 @@ st.markdown("""
         border-left: 4px solid #667eea;
         margin: 1rem 0;
     }
-    
-    /* Table styling */
     .dataframe {
         font-size: 0.9rem;
         border-collapse: collapse;
         width: 100%;
     }
-    
     .dataframe th {
         background-color: #667eea;
         color: white;
         padding: 0.75rem;
         text-align: left;
     }
-    
     .dataframe td {
         padding: 0.75rem;
         border-bottom: 1px solid #dee2e6;
     }
-    
     .dataframe tr:hover {
         background-color: #f5f5f5;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# # Fungsi untuk koneksi database dengan caching
+# ========== FUNGSI ETL ==========
+
+def extract_bitcoin_data():
+    """Extract langsung dari API"""
+    url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart"
+    params = {
+        "vs_currency": "usd",
+        "days": "360"
+    }
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        st.error(f"API Error: {e}")
+        return None
+
+def transform_bitcoin_data(data):
+    """Transform data dari API"""
+    if data is None:
+        return pd.DataFrame()
+    
+    try:
+        prices = data["prices"]
+        market_caps = data["market_caps"]
+        volumes = data["total_volumes"]
+        
+        df_prices = pd.DataFrame(prices, columns=["timestamp", "price"])
+        df_marketcap = pd.DataFrame(market_caps, columns=["timestamp", "market_cap"])
+        df_volume = pd.DataFrame(volumes, columns=["timestamp", "volume"])
+        
+        df = df_prices.merge(df_marketcap, on="timestamp")
+        df = df.merge(df_volume, on="timestamp")
+        df["date"] = pd.to_datetime(df["timestamp"], unit="ms")
+        df = df[["date", "price", "market_cap", "volume"]]
+        df = df.sort_values("date").reset_index(drop=True)
+        
+        return df
+    except Exception as e:
+        st.error(f"Transform Error: {e}")
+        return pd.DataFrame()
+
+def load_data_from_csv():
+    """Fallback: Load data dari CSV"""
+    csv_path = "data/bitcoin_market.csv"
+    if os.path.exists(csv_path):
+        try:
+            df = pd.read_csv(csv_path)
+            df['date'] = pd.to_datetime(df['date'])
+            return df
+        except Exception as e:
+            st.error(f"CSV Error: {e}")
+            return pd.DataFrame()
+    return pd.DataFrame()
+
+@st.cache_data(ttl=3600)  # Cache 1 jam
+def load_data():
+    """Load data dengan fallback: API dulu, lalu CSV"""
+    
+    # Coba API dulu
+    with st.spinner('📡 Fetching real-time data from CoinGecko...'):
+        raw_data = extract_bitcoin_data()
+        df = transform_bitcoin_data(raw_data)
+    
+    # Jika API gagal, fallback ke CSV
+    if df.empty:
+        st.warning("⚠️ API failed, loading from backup CSV...")
+        df = load_data_from_csv()
+        
+        if df.empty:
+            st.error("❌ No data available from API or CSV!")
+            return pd.DataFrame()
+        else:
+            st.success("✅ Loaded from backup CSV")
+    else:
+        st.success("✅ Loaded from CoinGecko API")
+    
+    return df
+
+# ========== FUNGSI BANTUAN ==========
+
+def calculate_moving_average(df, window):
+    """Hitung moving average"""
+    return df['price'].rolling(window=window).mean()
+
+# ========== MAIN APP ==========
+
+# USE DATABASE
 # @st.cache_data(ttl=3600)  # Cache 1 jam
 # def load_data():
 #     """Load data dari PostgreSQL dengan caching"""
@@ -95,60 +167,20 @@ st.markdown("""
 #         st.error(f"Error connecting to database: {e}")
 #         return pd.DataFrame()
 
-def extract_bitcoin_data():
-    """Extract langsung dari API"""
-    url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart"
-    params = {
-        "vs_currency": "usd",
-        "days": "360"
-    }
-    response = requests.get(url, params=params)
-    return response.json()
+# # Fungsi untuk menghitung moving average
+# def calculate_moving_average(df, window):
+#     return df['price'].rolling(window=window).mean()
 
-def transform_bitcoin_data(data):
-    """Transform data dari API"""
-    prices = data["prices"]
-    market_caps = data["market_caps"]
-    volumes = data["total_volumes"]
-    
-    df_prices = pd.DataFrame(prices, columns=["timestamp", "price"])
-    df_marketcap = pd.DataFrame(market_caps, columns=["timestamp", "market_cap"])
-    df_volume = pd.DataFrame(volumes, columns=["timestamp", "volume"])
-    
-    df = df_prices.merge(df_marketcap, on="timestamp")
-    df = df.merge(df_volume, on="timestamp")
-    df["date"] = pd.to_datetime(df["timestamp"], unit="ms")
-    df = df[["date", "price", "market_cap", "volume"]]
-    df = df.sort_values("date").reset_index(drop=True)
-    
-    return df
+# # Load data
+# with st.spinner('Loading data...'):
+#     df = load_data()
 
-@st.cache_data(ttl=3600)  # Cache 1 jam
-def load_data_from_api():
-    """Load data langsung dari API"""
-    try:
-        with st.spinner('Fetching data from CoinGecko...'):
-            raw_data = extract_bitcoin_data()
-            df = transform_bitcoin_data(raw_data)
-        return df
-    except Exception as e:
-        st.error(f"Error fetching from API: {e}")
-        return pd.DataFrame()
-
-# Panggil fungsi
-df = load_data_from_api()
-
-# Fungsi untuk menghitung moving average
-def calculate_moving_average(df, window):
-    return df['price'].rolling(window=window).mean()
 
 # Load data
-with st.spinner('Loading data...'):
-    df = load_data()
+df = load_data()
 
 # Cek apakah data kosong
 if df.empty:
-    st.error("No data available. Please check database connection.")
     st.stop()
 
 # Header dengan gradient
@@ -164,6 +196,9 @@ with st.sidebar:
     st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/4/46/Bitcoin.svg/1200px-Bitcoin.svg.png", 
              width=100)
     st.markdown("## ⚙️ Controls")
+    
+    # Data source info
+    st.info(f"📊 Data: {len(df)} days")
     
     # Date range filter
     min_date = df['date'].min().date()
@@ -182,6 +217,7 @@ with st.sidebar:
                          (df['date'].dt.date <= end_date)]
     else:
         df_filtered = df
+        start_date, end_date = min_date, max_date
     
     # Moving average window
     ma_window = st.slider("Moving Average Window (days)", 7, 90, 30)
@@ -210,8 +246,8 @@ col1, col2, col3, col4 = st.columns(4)
 
 with col1:
     current_price = df_filtered['price'].iloc[-1]
-    price_change = df_filtered['price'].iloc[-1] - df_filtered['price'].iloc[-2]
-    price_change_pct = (price_change / df_filtered['price'].iloc[-2]) * 100
+    price_change = df_filtered['price'].iloc[-1] - df_filtered['price'].iloc[-2] if len(df_filtered) > 1 else 0
+    price_change_pct = (price_change / df_filtered['price'].iloc[-2]) * 100 if len(df_filtered) > 1 else 0
     st.metric(
         "Current Price",
         f"${current_price:,.2f}",
@@ -363,8 +399,6 @@ st.markdown("---")
 st.markdown("""
     <div style='text-align: center; color: gray; padding: 1rem;'>
         <p>Data source: CoinGecko API | Last updated: {}</p>
-        <p>Built with Streamlit • PostgreSQL • Plotly</p>
+        <p>Built with Streamlit • Python • Plotly</p>
     </div>
 """.format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")), unsafe_allow_html=True)
-
-# Run with: streamlit run Dashboard.py
