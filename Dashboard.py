@@ -127,12 +127,12 @@ def load_data_from_csv():
 def load_data():
     """Load data dengan fallback: API dulu, lalu CSV"""
     
-    # Coba API dulu
+    # Cek API
     with st.spinner('📡 Fetching real-time data from CoinGecko...'):
         raw_data = extract_bitcoin_data()
         df = transform_bitcoin_data(raw_data)
     
-    # Jika API gagal, fallback ke CSV
+    # if API fails, fallback to CSV
     if df.empty:
         st.warning("⚠️ API failed, loading from backup CSV...")
         df = load_data_from_csv()
@@ -147,7 +147,7 @@ def load_data():
     
     return df
 
-# ========== FUNGSI BANTUAN ==========
+# ========== HELP FUNCTION ==========
 
 def calculate_moving_average(df, window):
     """Hitung moving average"""
@@ -179,7 +179,7 @@ def calculate_moving_average(df, window):
 # Load data
 df = load_data()
 
-# Cek apakah data kosong
+# Check whether the data is empty
 if df.empty:
     st.stop()
 
@@ -191,7 +191,7 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# Sidebar untuk filter dan kontrol
+# Sidebar for filters and controls
 with st.sidebar:
     st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/4/46/Bitcoin.svg/1200px-Bitcoin.svg.png", 
              width=100)
