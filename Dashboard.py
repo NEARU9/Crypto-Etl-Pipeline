@@ -8,8 +8,6 @@ from datetime import datetime, timedelta
 import requests
 import os
 
-st.image("Dashboard.png", width=150)
-
 # Page configuration
 st.set_page_config(
     page_title="Bitcoin Dashboard",
