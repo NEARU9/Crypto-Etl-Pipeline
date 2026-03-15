@@ -8,6 +8,17 @@ from datetime import datetime, timedelta
 import requests
 import os
 
+col1, col2 = st.columns([1, 2])
+with col1:
+    # Lebih aman dengan try-except
+    try:
+        image = Image.open('images/Dashboard.jpg') 
+        st.image(image, caption=None, output_format="JPEG", width=150)
+    except FileNotFoundError:
+        st.image("https://via.placeholder.com/150", width=150)  # Fallback
+with col2:
+    st.markdown("### Misinformation Susceptibility Test")
+
 # Page configuration
 st.set_page_config(
     page_title="Bitcoin Dashboard",
